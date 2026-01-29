@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>IBONIRIUM · WHEAT MONUMENTS · EXP-03</title>
+<title>IBONIRIUM · WHEAT MONUMENTS · EXP-04</title>
 
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
@@ -18,7 +18,7 @@ canvas { position:fixed; inset:0; }
   position:fixed;
   bottom:12px; left:12px;
   font-family:monospace;
-  color:#e8ffd0;
+  color:#f0ffd8;
   font-size:12px;
   line-height:1.4;
 }
@@ -29,7 +29,7 @@ canvas { position:fixed; inset:0; }
   max-width:360px;
   font-family:monospace;
   font-size:12px;
-  color:#f3ffd9;
+  color:#f6ffd6;
   line-height:1.45;
   background:linear-gradient(to left,rgba(0,0,0,0.7),transparent);
   padding:10px 14px;
@@ -43,7 +43,7 @@ canvas { position:fixed; inset:0; }
 <canvas id="sensors"></canvas>
 
 <div id="info">
-<b>IBONIRIUM · WHEAT MONUMENTS · EXP-03</b><br>
+<b>IBONIRIUM · WHEAT MONUMENTS · EXP-04</b><br>
 Phase: <span id="phase">Vegetation</span><br>
 Day: <span id="day">–</span><br>
 Solar SSN: <span id="ssn">–</span><br>
@@ -52,9 +52,9 @@ Growth Energy: <span id="ge">–</span>
 </div>
 
 <div id="panel">
-<b>МОНУМЕНТАЛЬНЕ ПОЛЕ</b><br>
-30 рослин у псевдо-3D просторі. Кожна має власну глибину, масштаб і кут.
-Колос — максимально наближений до реального: зерна, сегменти, маса.
+<b>СТАДІЇ ДОЗРІВАННЯ</b><br>
+Пшениця проходить повний цикл: зелена → жовта → золота.
+Колір є індикатором часу, сонця та накопиченої енергії.
 </div>
 
 <script>
@@ -76,7 +76,7 @@ addEventListener('resize', resize);
 resize();
 
 /* ===== STARS ===== */
-const stars = Array.from({length:140},()=>({x:Math.random(),y:Math.random(),z:Math.random()}));
+const stars = Array.from({length:120},()=>({x:Math.random(),y:Math.random(),z:Math.random()}));
 function drawStars(){
   sctx.clearRect(0,0,starCanvas.width,starCanvas.height);
   stars.forEach(st=>{
@@ -95,48 +95,74 @@ function drawStars(){
 }
 
 /* ===== ENV ===== */
-let solarSSN=0, solarFactor=1, growthEnergy=0;
+let solarSSN=0, solarFactor=1, growthEnergy=1;
 
-/* ===== PSEUDO-3D WHEAT ===== */
+/* ===== COLOR UTILS ===== */
+function lerp(a,b,t){ return a+(b-a)*t; }
+function colorBlend(c1,c2,t){
+  return `rgb(
+    ${lerp(c1[0],c2[0],t)},
+    ${lerp(c1[1],c2[1],t)},
+    ${lerp(c1[2],c2[2],t)}
+  )`;
+}
+
+/* ===== WHEAT ===== */
 class Wheat {
   constructor(){
-    this.x = Math.random()*2-1;     // world X
-    this.z = Math.random();         // depth 0..1
+    this.x = Math.random()*2-1;
+    this.z = Math.random();
     this.age = 0;
-    this.maxAge = 1;
     this.phase = Math.random()*Math.PI*2;
   }
 
   grow(){
     this.age += 0.00035 * solarFactor;
-    if(this.age>this.maxAge) this.age=this.maxAge;
+    if(this.age > 1) this.age = 1;
+  }
+
+  maturity(){
+    if(this.age < 0.4) return this.age/0.4;         // green
+    if(this.age < 0.7) return (this.age-0.4)/0.3;   // yellowing
+    return (this.age-0.7)/0.3;                       // gold
+  }
+
+  colors(){
+    if(this.age < 0.4){
+      return colorBlend([90,180,110],[150,200,120],this.maturity());
+    }
+    if(this.age < 0.7){
+      return colorBlend([150,200,120],[220,200,120],this.maturity());
+    }
+    return colorBlend([220,200,120],[240,210,140],this.maturity());
   }
 
   project(){
-    const depth = 0.3 + this.z*0.7;
-    const scale = 1.4 / depth;
+    const depth = 0.35 + this.z*0.65;
+    const scale = 1.5 / depth;
     return {
-      x: innerWidth/2 + this.x * innerWidth*0.25 * scale,
-      baseY: innerHeight*0.8 + depth*120,
+      x: innerWidth/2 + this.x * innerWidth*0.28 * scale,
+      baseY: innerHeight*0.82 + depth*120,
       scale
     };
   }
 
   draw(){
     const p = this.project();
-    const sway = Math.sin(Date.now()*0.0005 + this.phase) * 6 * p.scale;
+    const sway = Math.sin(Date.now()*0.00045 + this.phase) * 6 * p.scale;
     const height = this.age * 260 * solarFactor * p.scale;
+    const stemColor = this.colors();
 
-    // stem
-    fctx.strokeStyle='rgba(170,220,140,0.85)';
-    fctx.lineWidth=1.4*p.scale;
+    /* stem */
+    fctx.strokeStyle = stemColor;
+    fctx.lineWidth = 1.4 * p.scale;
     fctx.beginPath();
     fctx.moveTo(p.x, p.baseY);
     fctx.lineTo(p.x+sway, p.baseY-height);
     fctx.stroke();
 
-    // ear (realistic)
-    if(this.age>0.55){
+    /* ear */
+    if(this.age > 0.5){
       const earLen = height*0.35;
       const grains = 14;
       for(let i=0;i<grains;i++){
@@ -144,23 +170,14 @@ class Wheat {
         const y = p.baseY-height + t*earLen;
         const w = (1-t)*8*p.scale;
 
-        fctx.fillStyle=`rgba(230,210,150,${0.9-t*0.6})`;
+        fctx.fillStyle = stemColor;
         fctx.beginPath();
-        fctx.ellipse(
-          p.x+sway,
-          y,
-          w,
-          w*0.5,
-          0,
-          0,
-          Math.PI*2
-        );
+        fctx.ellipse(p.x+sway, y, w, w*0.55, 0, 0, Math.PI*2);
         fctx.fill();
 
-        // grain sides
         fctx.beginPath();
-        fctx.ellipse(p.x+sway-w*0.9,y,w*0.6,w*0.35,0,0,Math.PI*2);
-        fctx.ellipse(p.x+sway+w*0.9,y,w*0.6,w*0.35,0,0,Math.PI*2);
+        fctx.ellipse(p.x+sway-w*0.9,y,w*0.6,w*0.4,0,0,Math.PI*2);
+        fctx.ellipse(p.x+sway+w*0.9,y,w*0.6,w*0.4,0,0,Math.PI*2);
         fctx.fill();
       }
     }
@@ -168,18 +185,18 @@ class Wheat {
 }
 
 /* ===== FIELD ===== */
-const wheat = Array.from({length:30},()=>new Wheat())
-  .sort((a,b)=>b.z-a.z);
+const wheat = Array.from({length:50},()=>new Wheat()).sort((a,b)=>b.z-a.z);
 
 /* ===== NOAA ===== */
 async function updateSolar(){
   try{
     const r = await fetch(
-      'https://services.swpc.noaa.gov/json/solar-cycle/predicted-solar-cycle.json'
+      'https://services.swpc.noaa.gov/json/solar-cycle/predicted-solar-cycle.json',
+      { cache:'no-store' }
     );
     const d = await r.json();
     const l = d[d.length-1];
-    solarSSN = l.predicted_ssn;
+    solarSSN = Number(l.predicted_ssn)||solarSSN;
     solarFactor = Math.min(3,0.6+solarSSN/120);
     growthEnergy = solarFactor*(0.7+Math.random()*0.3);
 
@@ -190,21 +207,6 @@ async function updateSolar(){
 }
 updateSolar();
 setInterval(updateSolar,1800000);
-
-/* ===== SENSORS ===== */
-function drawSensors(){
-  scx.clearRect(0,0,sensorCanvas.width,sensorCanvas.height);
-  const y=110;
-
-  scx.strokeStyle='rgba(150,255,200,0.25)';
-  scx.beginPath(); scx.moveTo(0,y); scx.lineTo(sensorCanvas.width,y); scx.stroke();
-
-  scx.fillStyle='rgba(255,210,120,0.85)';
-  scx.beginPath(); scx.arc(80,y-40,10+solarFactor*3,0,Math.PI*2); scx.fill();
-
-  scx.strokeStyle='rgba(180,240,150,0.9)';
-  scx.beginPath(); scx.moveTo(160,y); scx.lineTo(160,y-growthEnergy*28); scx.stroke();
-}
 
 /* ===== TIME ===== */
 const START_DATE=new Date('2026-01-01');
@@ -220,8 +222,6 @@ setInterval(updateDay,60000);
 /* ===== LOOP ===== */
 function loop(){
   drawStars();
-  drawSensors();
-
   if(new Date()<STOP_DATE){
     fctx.clearRect(0,0,fieldCanvas.width,fieldCanvas.height);
     wheat.forEach(w=>{ w.grow(); w.draw(); });
