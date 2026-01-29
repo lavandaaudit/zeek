@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>IBONIRIUM · Terrarium · EXP‑03 · Поля Культур · Павутиння</title>
+<title>IBONIRIUM · Terrarium · EXP‑03 · Лабіринт Полів</title>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
 html, body {
@@ -50,11 +50,11 @@ Target: 13 December
 </div>
 <div id="panel">
 <b>СТАН ЕКСПЕРИМЕНТУ</b><br>
-Поля культур з павутинням. Кожне поле — свій колір, хаотична форма. Зв’язки між полями — тонкі лінії, що реагують на рух.<br><br>
-
+Поля культур з хаотичними формами та павутинням-зв’язками. З висоти утворюють лабіринт. Кожне поле — свій колір і форма.<br><br>
 До <b>13 грудня</b> — фаза росту. Потім фіксація.
 </div>
 <script>
+/* CANVAS */
 const starCanvas = document.getElementById('stars');
 const tCanvas = document.getElementById('terrarium');
 const sensorCanvas = document.getElementById('sensors');
@@ -107,7 +107,7 @@ async function updateSolar(){
 }
 updateSolar(); setInterval(updateSolar, 1800000);
 
-/* ПОЛЯ */
+/* КУЛЬТУРИ */
 const CULTURES = [
   {name:'Пшениця', color:'rgba(255,200,80,0.55)'},
   {name:'Ячмінь', color:'rgba(180,220,100,0.55)'},
@@ -118,37 +118,41 @@ const CULTURES = [
   {name:'Гречка', color:'rgba(255,150,180,0.55)'}
 ];
 
+/* Поле-клас */
 class Field {
   constructor(x,y){
     this.cx=x;
     this.cy=y;
     this.growth=0;
-    this.maxGrowth=20 + Math.random()*15; // більший радіус
+    this.maxGrowth=20 + Math.random()*20; // більше радіус
     this.offset=Math.random();
     this.dir=Math.random()<0.5?1:-1;
     this.speed=0.0003 + Math.random()*0.0005;
     this.culture = CULTURES[Math.floor(Math.random()*CULTURES.length)];
-    this.fieldSize = 3 + solarFactor*2;
+    this.chaosPoints = Array.from({length:5},()=>({x:(Math.random()-0.5)*30, y:(Math.random()-0.5)*30}));
   }
   grow(){
-    if(this.growth<this.maxGrowth) this.growth += 0.035*solarFactor;
-    this.speed = (0.0003 + Math.random()*0.0005) * solarFactor * 1.3;
+    if(this.growth<this.maxGrowth) this.growth += 0.03*solarFactor;
     this.offset += this.dir*this.speed;
     if(this.offset>1) this.offset-=1;
     if(this.offset<0) this.offset+=1;
-    this.fieldSize = 3 + solarFactor*2;
   }
   draw(){
     const breath = 1 + Math.sin(Date.now()*0.0008 + this.offset*Math.PI)*0.03;
-    const steps = Math.min(this.growth,this.maxGrowth)*35; // більше витків
+    const steps = Math.min(this.growth,this.maxGrowth)*30;
+
+    // Хаотична форма
     tctx.strokeStyle=this.culture.color;
-    tctx.lineWidth=0.7;
+    tctx.lineWidth=0.8;
     tctx.beginPath();
     for(let i=0;i<=steps;i++){
-      const t = i/steps;
-      const chaos = (Math.random()-0.5)*5*activity; // хаотична форма
-      const radius = t*70*breath*(1 + activity*0.4) + chaos; // більший радіус
-      const angle = t*Math.PI*2*(0.25*15 + Math.sin(i*0.3+this.offset*5)); // хаотичний поворот
+      const t=i/steps;
+      let radius = t*100*breath*(1+activity*0.3);
+      // додаємо хаотичні точки для форми
+      this.chaosPoints.forEach(p=>{
+        radius += Math.sin(i*0.5 + p.x + Date.now()*0.0005)*5;
+      });
+      const angle = t*Math.PI*2*(0.25*10 + Math.sin(i*0.3+this.offset*5));
       const x = this.cx + Math.cos(angle)*radius;
       const y = this.cy + Math.sin(angle)*radius;
       if(i===0) tctx.moveTo(x,y);
@@ -157,27 +161,24 @@ class Field {
     tctx.stroke();
 
     // Центр поля
-    const markerR = this.offset*70*0.92*breath;
-    const markerA = this.offset*Math.PI*2*12;
-    const px = this.cx + Math.cos(markerA)*markerR;
-    const py = this.cy + Math.sin(markerA)*markerR;
-    const tremor = Math.sin(Date.now()*0.012 + this.cx)*0.4;
+    const px=this.cx + Math.cos(this.offset*Math.PI*2)*this.growth*4;
+    const py=this.cy + Math.sin(this.offset*Math.PI*2)*this.growth*4;
     tctx.fillStyle="rgba(30,20,50,0.9)";
     tctx.beginPath();
-    tctx.arc(px + tremor, py, this.fieldSize, 0, Math.PI*2);
+    tctx.arc(px,py,4,0,Math.PI*2);
     tctx.fill();
   }
 }
 
-// Масив полів
+/* Масив полів */
 const fields = Array.from({length:22},()=>new Field(
   Math.random()*tCanvas.width,
   Math.random()*tCanvas.height*0.85 + tCanvas.height*0.1
 ));
 
-// Зв'язки між полями
+/* Зв'язки — лабіринт */
 function drawLinks(){
-  tctx.strokeStyle='rgba(180,180,255,0.12)';
+  tctx.strokeStyle='rgba(180,180,255,0.1)';
   tctx.lineWidth=0.5;
   for(let i=0;i<fields.length;i++){
     for(let j=i+1;j<fields.length;j++){
@@ -185,11 +186,11 @@ function drawLinks(){
       const dx=f2.cx-f1.cx;
       const dy=f2.cy-f1.cy;
       const dist=Math.sqrt(dx*dx+dy*dy);
-      if(dist<400){ // тільки ближні
-        const chaos = (Math.random()-0.5)*6*activity;
+      if(dist<400){
         tctx.beginPath();
-        tctx.moveTo(f1.cx + chaos, f1.cy + chaos);
-        tctx.lineTo(f2.cx + chaos, f2.cy + chaos);
+        const chaos=Math.sin(Date.now()*0.001 + i*j)*5;
+        tctx.moveTo(f1.cx+chaos,f1.cy+chaos);
+        tctx.lineTo(f2.cx+chaos,f2.cy+chaos);
         tctx.stroke();
       }
     }
@@ -231,7 +232,7 @@ const START_DATE = new Date('2026-01-01');
 const STOP_DATE = new Date('2026-12-13');
 function updateDay(){
   const now = new Date();
-  const day = Math.floor((now - START_DATE)/86400000);
+  const day = Math.floor((now-START_DATE)/86400000);
   document.getElementById('day').textContent = day>=0?day:'–';
   document.getElementById('phase').textContent = now<STOP_DATE?'Growth':'Final';
 }
