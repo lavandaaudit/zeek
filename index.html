@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>IBONIRIUM · Wheat Terrarium · EXP-02</title>
+
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body {
+  width:100%; height:100%;
+  background:#000;
+  overflow:hidden;
+}
+canvas { position:fixed; inset:0; }
+
+#info {
+  position:fixed;
+  bottom:12px; left:12px;
+  font-family:monospace;
+  color:#caff9e;
+  font-size:12px;
+  line-height:1.4;
+  opacity:0.9;
+}
+
+#panel {
+  position:fixed;
+  bottom:12px; right:12px;
+  max-width:360px;
+  font-family:monospace;
+  font-size:12px;
+  color:#eaffc7;
+  line-height:1.45;
+  background:linear-gradient(to left,rgba(0,0,0,0.65),transparent);
+  padding:10px 14px;
+}
+</style>
+</head>
+<body>
+
+<canvas id="stars"></canvas>
+<canvas id="field"></canvas>
+<canvas id="sensors"></canvas>
+
+<div id="info">
+<b>IBONIRIUM · WHEAT LAB · EXP-02</b><br>
+Phase: <span id="phase">Vegetation</span><br>
+Day: <span id="day">–</span><br>
+Solar SSN: <span id="ssn">–</span><br>
+Solar Factor: <span id="sf">–</span><br>
+Growth Energy: <span id="ge">–</span><br>
+Target: 13 December
+</div>
+
+<div id="panel">
+<b>СИМУЛЯЦІЯ ПШЕНИЦІ</b><br>
+Це живе поле пшениці, яке росте виключно за рахунок реальної сонячної активності.
+Сонячне число плям (NOAA) формує енергію фотосинтезу, що впливає на висоту стебел,
+кількість вузлів і формування колосу.<br><br>
+До <b>13 грудня</b> триває фаза вегетації. Після цього поле фіксується
+як фінальний стан експерименту.
+</div>
+
+<script>
+/* ===== CANVAS ===== */
+const starCanvas = document.getElementById('stars');
+const fieldCanvas = document.getElementById('field');
+const sensorCanvas = document.getElementById('sensors');
+
+const sctx = starCanvas.getContext('2d');
+const fctx = fieldCanvas.getContext('2d');
+const scx = sensorCanvas.getContext('2d');
+
+function resize(){
+  starCanvas.width = fieldCanvas.width = sensorCanvas.width = innerWidth;
+  starCanvas.height = fieldCanvas.height = innerHeight;
+  sensorCanvas.height = 140;
+}
+addEventListener('resize', resize);
+resize();
+
+/* ===== STAR FIELD ===== */
+const stars = Array.from({length:260},()=>({
+  x:Math.random(), y:Math.random(), z:Math.random()
+}));
+
+function drawStars(){
+  sctx.clearRect(0,0,starCanvas.width,starCanvas.height);
+  stars.forEach(st=>{
+    st.y += 0.0002*(1+st.z);
+    if(st.y>1) st.y=0;
+    sctx.globalAlpha = 0.25 + st.z*0.6;
+    sctx.fillStyle = "#fff";
+    sctx.beginPath();
+    sctx.arc(st.x*starCanvas.width, st.y*starCanvas.height, st.z*1.5, 0, Math.PI*2);
+    sctx.fill();
+  });
+  sctx.globalAlpha = 1;
+}
+
+/* ===== NOISE ===== */
+function noise(x,y){
+  return Math.sin(x*17.31 + y*91.7)*43758.5453 % 1;
+}
+
+/* ===== ENV DATA ===== */
+let solarSSN = 0;
+let solarFactor = 1;
+let growthEnergy = 0;
+
+/* ===== WHEAT PLANTS ===== */
+class Wheat {
+  constructor(x){
+    this.x = x;
+    this.age = 0;
+    this.maxAge = 1 + Math.random()*0.5;
+    this.nodes = 2 + Math.floor(Math.random()*3);
+  }
+
+  grow(){
+    this.age += 0.0005 * solarFactor;
+    if(this.age > this.maxAge) this.age = this.maxAge;
+  }
+
+  draw(){
+    const baseY = fieldCanvas.height*0.78 + noise(this.x,0)*30;
+    const height = this.age * 220 * solarFactor;
+    const sway = Math.sin(Date.now()*0.001 + this.x*0.01) * 8;
+
+    let x = this.x;
+    let y = baseY;
+
+    // stem
+    fctx.strokeStyle = 'rgba(180,220,120,0.8)';
+    fctx.lineWidth = 1;
+    fctx.beginPath();
+    fctx.moveTo(x, y);
+    fctx.lineTo(x+sway, y-height);
+    fctx.stroke();
+
+    // nodes
+    for(let i=1;i<=this.nodes;i++){
+      const ny = y - (height/this.nodes)*i;
+      fctx.beginPath();
+      fctx.arc(x+sway*0.6, ny, 1.8, 0, Math.PI*2);
+      fctx.fillStyle = 'rgba(200,240,160,0.9)';
+      fctx.fill();
+    }
+
+    // ear (колос)
+    if(this.age >= this.maxAge*0.8){
+      const earY = y-height;
+      fctx.strokeStyle = 'rgba(230,210,140,0.9)';
+      for(let i=0;i<6;i++){
+        fctx.beginPath();
+        fctx.moveTo(x+sway, earY+i*4);
+        fctx.lineTo(x+sway+6, earY+i*4-3);
+        fctx.stroke();
+      }
+    }
+  }
+}
+
+const wheatField = Array.from({length:260},(_,i)=>
+  new Wheat((i/260)*innerWidth)
+);
+
+/* ===== NOAA SOLAR API ===== */
+async function updateSolar(){
+  try{
+    const r = await fetch(
+      'https://services.swpc.noaa.gov/json/solar-cycle/predicted-solar-cycle.json'
+    );
+    const d = await r.json();
+    const last = d[d.length-1];
+    solarSSN = last.predicted_ssn;
+    solarFactor = Math.min(3, 0.6 + solarSSN/120);
+    growthEnergy = solarFactor * (0.7 + Math.random()*0.3);
+
+    ssn.textContent = solarSSN.toFixed(1);
+    sf.textContent = solarFactor.toFixed(2);
+    ge.textContent = growthEnergy.toFixed(2);
+  }catch(e){
+    solarFactor = 1;
+  }
+}
+updateSolar();
+setInterval(updateSolar, 1800000);
+
+/* ===== SENSORS ===== */
+function drawSensors(){
+  scx.clearRect(0,0,sensorCanvas.width,sensorCanvas.height);
+  const baseY = 110;
+
+  scx.strokeStyle='rgba(150,255,200,0.25)';
+  scx.beginPath();
+  scx.moveTo(0,baseY);
+  scx.lineTo(sensorCanvas.width,baseY);
+  scx.stroke();
+
+  // sun
+  scx.fillStyle='rgba(255,210,120,0.85)';
+  scx.beginPath();
+  scx.arc(80, baseY-40, 10+solarFactor*3, 0, Math.PI*2);
+  scx.fill();
+  scx.fillText('☀ сонце', 50, baseY+20);
+
+  // growth
+  scx.strokeStyle='rgba(180,240,150,0.9)';
+  scx.beginPath();
+  scx.moveTo(160, baseY);
+  scx.lineTo(160, baseY-growthEnergy*28);
+  scx.stroke();
+  scx.fillText('🌾 ріст', 140, baseY+20);
+
+  // time
+  const now = new Date();
+  const t = Math.min(1,(now-START_DATE)/(STOP_DATE-START_DATE));
+  scx.strokeStyle='rgba(180,180,255,0.8)';
+  scx.beginPath();
+  scx.arc(260, baseY, 30, -Math.PI/2, -Math.PI/2+t*Math.PI*2);
+  scx.stroke();
+  scx.fillText('⏳ цикл', 235, baseY+20);
+}
+
+/* ===== TIME ===== */
+const START_DATE = new Date('2026-01-01');
+const STOP_DATE  = new Date('2026-12-13');
+
+function updateDay(){
+  const now = new Date();
+  const day = Math.floor((now-START_DATE)/(1000*60*60*24));
+  dayEl.textContent = day>=0?day:0;
+  phase.textContent = now<STOP_DATE ? 'Vegetation' : 'Final';
+}
+const dayEl = document.getElementById('day');
+const phase = document.getElementById('phase');
+updateDay();
+setInterval(updateDay,60000);
+
+/* ===== LOOP ===== */
+function loop(){
+  drawStars();
+  drawSensors();
+
+  if(new Date()<STOP_DATE){
+    fctx.clearRect(0,0,fieldCanvas.width,fieldCanvas.height);
+    wheatField.forEach(w=>{
+      w.grow();
+      w.draw();
+    });
+  }
+
+  requestAnimationFrame(loop);
+}
+loop();
+</script>
+</body>
+</html>
