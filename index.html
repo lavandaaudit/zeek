@@ -3,8 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>IBONIRIUM · WHEAT MONUMENTS · EXP-04</title>
-
+<title>IBONIRIUM · Terrarium · EXP‑03 · Поля Культур</title>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
 html, body {
@@ -13,218 +12,223 @@ html, body {
   overflow:hidden;
 }
 canvas { position:fixed; inset:0; }
-
+#sensors{ position:fixed; left:0; right:0; bottom:0; height:140px; pointer-events:none; }
 #info {
   position:fixed;
   bottom:12px; left:12px;
   font-family:monospace;
-  color:#f0ffd8;
+  color:#88ffcc;
   font-size:12px;
   line-height:1.4;
+  opacity:0.85;
 }
-
 #panel {
   position:fixed;
   bottom:12px; right:12px;
   max-width:360px;
   font-family:monospace;
   font-size:12px;
-  color:#f6ffd6;
+  color:#c7ffd9;
   line-height:1.45;
-  background:linear-gradient(to left,rgba(0,0,0,0.7),transparent);
+  background:linear-gradient(to left,rgba(0,0,0,0.65),transparent);
   padding:10px 14px;
 }
 </style>
 </head>
 <body>
-
 <canvas id="stars"></canvas>
-<canvas id="field"></canvas>
+<canvas id="terrarium"></canvas>
 <canvas id="sensors"></canvas>
-
 <div id="info">
-<b>IBONIRIUM · WHEAT MONUMENTS · EXP-04</b><br>
-Phase: <span id="phase">Vegetation</span><br>
+<b>IBONIRIUM · LAB TERRARIUM · EXP‑03</b><br>
+Phase: <span id="phase">Growth</span><br>
 Day: <span id="day">–</span><br>
 Solar SSN: <span id="ssn">–</span><br>
 Solar Factor: <span id="sf">–</span><br>
-Growth Energy: <span id="ge">–</span>
+Activity: <span id="ge">–</span><br>
+Target: 13 December
 </div>
-
 <div id="panel">
-<b>СТАДІЇ ДОЗРІВАННЯ</b><br>
-Пшениця проходить повний цикл: зелена → жовта → золота.
-Колір є індикатором часу, сонця та накопиченої енергії.
+<b>СТАН ЕКСПЕРИМЕНТУ</b><br>
+Поля культур (вид зверху). Кожне поле — окремий колір, реагує на сонячні дані NOAA.<br><br>
+
+<b>Як сонячні явища впливають на поля:</b><br>
+• Вища SSN → швидший ріст, більший розмір полів<br>
+• Зростання сонячної активності → більше «витків» росту, сильніше коливання рослин<br>
+• Геомагнітні бурі → локальні пульсації окремих полів<br>
+• Спокійне сонце → плавне рівномірне зростання<br>
+• Різкі спалахи → короткочасні «шоки», випадкові деформації полів<br><br>
+
+До <b>13 грудня</b> — фаза росту. Потім фіксація.
 </div>
-
 <script>
-/* ===== CANVAS ===== */
+/* CANVAS */
 const starCanvas = document.getElementById('stars');
-const fieldCanvas = document.getElementById('field');
+const tCanvas = document.getElementById('terrarium');
 const sensorCanvas = document.getElementById('sensors');
-
 const sctx = starCanvas.getContext('2d');
-const fctx = fieldCanvas.getContext('2d');
+const tctx = tCanvas.getContext('2d');
 const scx = sensorCanvas.getContext('2d');
 
 function resize(){
-  starCanvas.width = fieldCanvas.width = sensorCanvas.width = innerWidth;
-  starCanvas.height = fieldCanvas.height = innerHeight;
+  starCanvas.width = tCanvas.width = sensorCanvas.width = innerWidth;
+  starCanvas.height = tCanvas.height = innerHeight;
   sensorCanvas.height = 140;
 }
-addEventListener('resize', resize);
-resize();
+addEventListener('resize', resize); resize();
 
-/* ===== STARS ===== */
-const stars = Array.from({length:120},()=>({x:Math.random(),y:Math.random(),z:Math.random()}));
+/* Зірки */
+const stars = Array.from({length:300},()=>({x:Math.random(),y:Math.random(),z:Math.random()*0.8+0.2}));
 function drawStars(){
   sctx.clearRect(0,0,starCanvas.width,starCanvas.height);
   stars.forEach(st=>{
-    st.y+=0.00012*(1+st.z);
+    st.y += 0.00008 * st.z;
     if(st.y>1) st.y=0;
-    sctx.globalAlpha=0.2+st.z*0.5;
-    sctx.fillStyle="#fff";
-    sctx.fillRect(
-      st.x*starCanvas.width,
-      st.y*starCanvas.height,
-      1+st.z,
-      1+st.z
-    );
+    sctx.globalAlpha = 0.25 + st.z*0.4;
+    sctx.fillStyle="#ddd";
+    sctx.beginPath();
+    sctx.arc(st.x*starCanvas.width, st.y*starCanvas.height, st.z*1.1, 0, Math.PI*2);
+    sctx.fill();
   });
   sctx.globalAlpha=1;
 }
 
-/* ===== ENV ===== */
-let solarSSN=0, solarFactor=1, growthEnergy=1;
-
-/* ===== COLOR UTILS ===== */
-function lerp(a,b,t){ return a+(b-a)*t; }
-function colorBlend(c1,c2,t){
-  return `rgb(
-    ${lerp(c1[0],c2[0],t)},
-    ${lerp(c1[1],c2[1],t)},
-    ${lerp(c1[2],c2[2],t)}
-  )`;
-}
-
-/* ===== WHEAT ===== */
-class Wheat {
-  constructor(){
-    this.x = Math.random()*2-1;
-    this.z = Math.random();
-    this.age = 0;
-    this.phase = Math.random()*Math.PI*2;
-  }
-
-  grow(){
-    this.age += 0.00035 * solarFactor;
-    if(this.age > 1) this.age = 1;
-  }
-
-  maturity(){
-    if(this.age < 0.4) return this.age/0.4;         // green
-    if(this.age < 0.7) return (this.age-0.4)/0.3;   // yellowing
-    return (this.age-0.7)/0.3;                       // gold
-  }
-
-  colors(){
-    if(this.age < 0.4){
-      return colorBlend([90,180,110],[150,200,120],this.maturity());
-    }
-    if(this.age < 0.7){
-      return colorBlend([150,200,120],[220,200,120],this.maturity());
-    }
-    return colorBlend([220,200,120],[240,210,140],this.maturity());
-  }
-
-  project(){
-    const depth = 0.35 + this.z*0.65;
-    const scale = 1.5 / depth;
-    return {
-      x: innerWidth/2 + this.x * innerWidth*0.28 * scale,
-      baseY: innerHeight*0.82 + depth*120,
-      scale
-    };
-  }
-
-  draw(){
-    const p = this.project();
-    const sway = Math.sin(Date.now()*0.00045 + this.phase) * 6 * p.scale;
-    const height = this.age * 260 * solarFactor * p.scale;
-    const stemColor = this.colors();
-
-    /* stem */
-    fctx.strokeStyle = stemColor;
-    fctx.lineWidth = 1.4 * p.scale;
-    fctx.beginPath();
-    fctx.moveTo(p.x, p.baseY);
-    fctx.lineTo(p.x+sway, p.baseY-height);
-    fctx.stroke();
-
-    /* ear */
-    if(this.age > 0.5){
-      const earLen = height*0.35;
-      const grains = 14;
-      for(let i=0;i<grains;i++){
-        const t = i/grains;
-        const y = p.baseY-height + t*earLen;
-        const w = (1-t)*8*p.scale;
-
-        fctx.fillStyle = stemColor;
-        fctx.beginPath();
-        fctx.ellipse(p.x+sway, y, w, w*0.55, 0, 0, Math.PI*2);
-        fctx.fill();
-
-        fctx.beginPath();
-        fctx.ellipse(p.x+sway-w*0.9,y,w*0.6,w*0.4,0,0,Math.PI*2);
-        fctx.ellipse(p.x+sway+w*0.9,y,w*0.6,w*0.4,0,0,Math.PI*2);
-        fctx.fill();
-      }
-    }
-  }
-}
-
-/* ===== FIELD ===== */
-const wheat = Array.from({length:50},()=>new Wheat()).sort((a,b)=>b.z-a.z);
-
-/* ===== NOAA ===== */
+/* NOAA */
+let solarFactor = 1;
+let solarSSN = 0;
+let activity = 0;
 async function updateSolar(){
   try{
-    const r = await fetch(
-      'https://services.swpc.noaa.gov/json/solar-cycle/predicted-solar-cycle.json',
-      { cache:'no-store' }
-    );
+    const r = await fetch('https://services.swpc.noaa.gov/json/solar-cycle/predicted-solar-cycle.json');
     const d = await r.json();
     const l = d[d.length-1];
-    solarSSN = Number(l.predicted_ssn)||solarSSN;
-    solarFactor = Math.min(3,0.6+solarSSN/120);
-    growthEnergy = solarFactor*(0.7+Math.random()*0.3);
-
-    ssn.textContent=solarSSN.toFixed(1);
-    sf.textContent=solarFactor.toFixed(2);
-    ge.textContent=growthEnergy.toFixed(2);
-  }catch(e){}
+    solarSSN = l.predicted_ssn;
+    solarFactor = Math.min(4, 0.7 + solarSSN/100);
+    activity = solarFactor * (0.6 + Math.random()*0.4);
+   
+    document.getElementById('ssn').textContent = solarSSN.toFixed(1);
+    document.getElementById('sf').textContent = solarFactor.toFixed(2);
+    document.getElementById('ge').textContent = activity.toFixed(2);
+  }catch(e){
+    solarFactor = 1.2;
+  }
 }
-updateSolar();
-setInterval(updateSolar,1800000);
+updateSolar(); setInterval(updateSolar, 1800000);
 
-/* ===== TIME ===== */
-const START_DATE=new Date('2026-01-01');
-const STOP_DATE=new Date('2026-12-13');
+/* ПОЛЯ КУЛЬТУР */
+const CULTURES = [
+  {name:'Пшениця', color:'rgba(255,200,80,0.55)'},
+  {name:'Ячмінь', color:'rgba(180,220,100,0.55)'},
+  {name:'Кукурудза', color:'rgba(255,230,150,0.55)'},
+  {name:'Рис', color:'rgba(150,200,255,0.55)'},
+  {name:'Соя', color:'rgba(180,150,255,0.55)'},
+  {name:'Овес', color:'rgba(200,180,255,0.55)'},
+  {name:'Гречка', color:'rgba(255,150,180,0.55)'}
+];
+
+class Field {
+  constructor(x,y){
+    this.cx=x;
+    this.cy=y;
+    this.growth=0;
+    this.maxGrowth=18 + Math.random()*12;
+    this.offset=Math.random();
+    this.dir=Math.random()<0.5?1:-1;
+    this.speed=0.0003 + Math.random()*0.0005;
+    this.culture = CULTURES[Math.floor(Math.random()*CULTURES.length)];
+    this.fieldSize = 2.5 + solarFactor*1.2;
+  }
+  grow(){
+    if(this.growth<this.maxGrowth) this.growth += 0.028*solarFactor;
+    this.speed = (0.0003 + Math.random()*0.0005) * solarFactor * 1.3;
+    this.offset += this.dir*this.speed;
+    if(this.offset>1) this.offset-=1;
+    if(this.offset<0) this.offset+=1;
+    this.fieldSize = 2.5 + solarFactor*1.2;
+  }
+  draw(){
+    const breath = 1 + Math.sin(Date.now()*0.0008 + this.offset*Math.PI)*0.02;
+    const steps = Math.min(this.growth,this.maxGrowth)*25;
+    tctx.strokeStyle=this.culture.color;
+    tctx.lineWidth=0.6;
+    tctx.beginPath();
+    for(let i=0;i<=steps;i++){
+      const t = i/steps;
+      const radius = t*50*breath*(1 + activity*0.4);
+      const angle = t*Math.PI*2*(0.2*15);
+      const x = this.cx + Math.cos(angle)*radius;
+      const y = this.cy + Math.sin(angle)*radius;
+      if(i===0) tctx.moveTo(x,y);
+      else tctx.lineTo(x,y);
+    }
+    tctx.stroke();
+
+    // Центр поля — «павук» як маркер
+    const markerR = this.offset*50*0.92*breath;
+    const markerA = this.offset*Math.PI*2*12;
+    const px = this.cx + Math.cos(markerA)*markerR;
+    const py = this.cy + Math.sin(markerA)*markerR;
+    const tremor = Math.sin(Date.now()*0.012 + this.cx)*0.4;
+    tctx.fillStyle="rgba(30,20,50,0.9)";
+    tctx.beginPath();
+    tctx.arc(px + tremor, py, this.fieldSize, 0, Math.PI*2);
+    tctx.fill();
+  }
+}
+
+const fields = Array.from({length:22},()=>new Field(
+  Math.random()*tCanvas.width,
+  Math.random()*tCanvas.height*0.85 + tCanvas.height*0.1
+));
+
+/* SENSORS */
+function drawSensors(){
+  scx.clearRect(0,0,sensorCanvas.width,sensorCanvas.height);
+  const baseY = 110;
+  scx.strokeStyle='rgba(120,255,180,0.15)';
+  scx.beginPath(); scx.moveTo(0,baseY); scx.lineTo(sensorCanvas.width,baseY); scx.stroke();
+
+  scx.fillStyle='rgba(255,220,140,0.75)';
+  scx.beginPath();
+  scx.arc(80, baseY-40, 9 + solarFactor*4.5, 0, Math.PI*2);
+  scx.fill();
+  scx.fillStyle="#fff"; scx.font="11px monospace";
+  scx.fillText('☀ SSN', 55, baseY+20);
+
+  scx.strokeStyle='rgba(160,220,255,0.75)';
+  scx.beginPath();
+  scx.moveTo(160, baseY);
+  scx.lineTo(160, baseY - activity*32);
+  scx.stroke();
+  scx.fillText('🧬 ріст', 130, baseY+20);
+
+  const now = new Date();
+  const t = Math.min(1,(now-START_DATE)/(STOP_DATE-START_DATE));
+  scx.strokeStyle='rgba(200,200,255,0.6)';
+  scx.beginPath();
+  scx.arc(260, baseY, 30, -Math.PI/2, -Math.PI/2 + t*Math.PI*2);
+  scx.stroke();
+  scx.fillText('⏳', 245, baseY+20);
+}
+
+/* LOOP */
+const START_DATE = new Date('2026-01-01');
+const STOP_DATE = new Date('2026-12-13');
 function updateDay(){
-  const now=new Date();
-  day.textContent=Math.max(0,Math.floor((now-START_DATE)/86400000));
-  phase.textContent=now<STOP_DATE?'Vegetation':'Final';
+  const now = new Date();
+  const day = Math.floor((now - START_DATE)/86400000);
+  document.getElementById('day').textContent = day>=0?day:'–';
+  document.getElementById('phase').textContent = now<STOP_DATE?'Growth':'Final';
 }
-updateDay();
 setInterval(updateDay,60000);
+updateDay();
 
-/* ===== LOOP ===== */
 function loop(){
   drawStars();
+  drawSensors();
   if(new Date()<STOP_DATE){
-    fctx.clearRect(0,0,fieldCanvas.width,fieldCanvas.height);
-    wheat.forEach(w=>{ w.grow(); w.draw(); });
+    tctx.clearRect(0,0,tCanvas.width,tCanvas.height);
+    fields.forEach(f=>{ f.grow(); f.draw(); });
   }
   requestAnimationFrame(loop);
 }
