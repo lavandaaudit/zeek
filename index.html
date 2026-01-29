@@ -18,7 +18,7 @@ canvas { position:fixed; inset:0; }
   position:fixed;
   bottom:12px; left:12px;
   font-family:monospace;
-  color:#caff9e;
+  color:#d6ff9e;
   font-size:12px;
   line-height:1.4;
   opacity:0.9;
@@ -30,7 +30,7 @@ canvas { position:fixed; inset:0; }
   max-width:360px;
   font-family:monospace;
   font-size:12px;
-  color:#eaffc7;
+  color:#f0ffd2;
   line-height:1.45;
   background:linear-gradient(to left,rgba(0,0,0,0.65),transparent);
   padding:10px 14px;
@@ -54,12 +54,9 @@ Target: 13 December
 </div>
 
 <div id="panel">
-<b>СИМУЛЯЦІЯ ПШЕНИЦІ</b><br>
-Це живе поле пшениці, яке росте виключно за рахунок реальної сонячної активності.
-Сонячне число плям (NOAA) формує енергію фотосинтезу, що впливає на висоту стебел,
-кількість вузлів і формування колосу.<br><br>
-До <b>13 грудня</b> триває фаза вегетації. Після цього поле фіксується
-як фінальний стан експерименту.
+<b>ГЕОМЕТРИЧНЕ ПОЛЕ</b><br>
+Камера наближена до рослин. Колоски редуковані до геометричних форм.
+Анімація уповільнена, структурна, лабораторна.
 </div>
 
 <script>
@@ -81,27 +78,25 @@ addEventListener('resize', resize);
 resize();
 
 /* ===== STAR FIELD ===== */
-const stars = Array.from({length:260},()=>({
+const stars = Array.from({length:180},()=>({
   x:Math.random(), y:Math.random(), z:Math.random()
 }));
 
 function drawStars(){
   sctx.clearRect(0,0,starCanvas.width,starCanvas.height);
   stars.forEach(st=>{
-    st.y += 0.0002*(1+st.z);
+    st.y += 0.00015*(1+st.z);
     if(st.y>1) st.y=0;
-    sctx.globalAlpha = 0.25 + st.z*0.6;
+    sctx.globalAlpha = 0.25 + st.z*0.5;
     sctx.fillStyle = "#fff";
-    sctx.beginPath();
-    sctx.arc(st.x*starCanvas.width, st.y*starCanvas.height, st.z*1.5, 0, Math.PI*2);
-    sctx.fill();
+    sctx.fillRect(
+      st.x*starCanvas.width,
+      st.y*starCanvas.height,
+      1+st.z,
+      1+st.z
+    );
   });
   sctx.globalAlpha = 1;
-}
-
-/* ===== NOISE ===== */
-function noise(x,y){
-  return Math.sin(x*17.31 + y*91.7)*43758.5453 % 1;
 }
 
 /* ===== ENV DATA ===== */
@@ -109,61 +104,63 @@ let solarSSN = 0;
 let solarFactor = 1;
 let growthEnergy = 0;
 
-/* ===== WHEAT PLANTS ===== */
+/* ===== GEOMETRIC WHEAT ===== */
 class Wheat {
   constructor(x){
     this.x = x;
     this.age = 0;
-    this.maxAge = 1 + Math.random()*0.5;
-    this.nodes = 2 + Math.floor(Math.random()*3);
+    this.maxAge = 1;
+    this.modules = 6 + Math.floor(Math.random()*4);
+    this.phase = Math.random()*Math.PI*2;
   }
 
   grow(){
-    this.age += 0.0005 * solarFactor;
+    this.age += 0.00035 * solarFactor;
     if(this.age > this.maxAge) this.age = this.maxAge;
   }
 
   draw(){
-    const baseY = fieldCanvas.height*0.78 + noise(this.x,0)*30;
-    const height = this.age * 220 * solarFactor;
-    const sway = Math.sin(Date.now()*0.001 + this.x*0.01) * 8;
+    const baseY = fieldCanvas.height*0.82;
+    const height = this.age * 260 * solarFactor;
+
+    const sway =
+      Math.sin(Date.now()*0.0006 + this.phase) *
+      6 * this.age;
 
     let x = this.x;
     let y = baseY;
 
     // stem
-    fctx.strokeStyle = 'rgba(180,220,120,0.8)';
-    fctx.lineWidth = 1;
+    fctx.strokeStyle = 'rgba(170,220,140,0.7)';
+    fctx.lineWidth = 1.2;
     fctx.beginPath();
     fctx.moveTo(x, y);
     fctx.lineTo(x+sway, y-height);
     fctx.stroke();
 
-    // nodes
-    for(let i=1;i<=this.nodes;i++){
-      const ny = y - (height/this.nodes)*i;
-      fctx.beginPath();
-      fctx.arc(x+sway*0.6, ny, 1.8, 0, Math.PI*2);
-      fctx.fillStyle = 'rgba(200,240,160,0.9)';
-      fctx.fill();
-    }
+    // geometric ear (modules)
+    if(this.age > 0.5){
+      const mH = height*0.45;
+      const step = mH / this.modules;
 
-    // ear (колос)
-    if(this.age >= this.maxAge*0.8){
-      const earY = y-height;
-      fctx.strokeStyle = 'rgba(230,210,140,0.9)';
-      for(let i=0;i<6;i++){
+      for(let i=0;i<this.modules;i++){
+        const py = y-height + i*step;
+        const w = 6 + i*0.6;
+
+        fctx.strokeStyle = `rgba(230,210,150,${0.85 - i*0.05})`;
         fctx.beginPath();
-        fctx.moveTo(x+sway, earY+i*4);
-        fctx.lineTo(x+sway+6, earY+i*4-3);
+        fctx.moveTo(x+sway-w, py);
+        fctx.lineTo(x+sway, py-step*0.6);
+        fctx.lineTo(x+sway+w, py);
         fctx.stroke();
       }
     }
   }
 }
 
-const wheatField = Array.from({length:260},(_,i)=>
-  new Wheat((i/260)*innerWidth)
+/* ===== FIELD (CAMERA CLOSER) ===== */
+const wheatField = Array.from({length:120},(_,i)=>
+  new Wheat(innerWidth*0.15 + (i/120)*innerWidth*0.7)
 );
 
 /* ===== NOAA SOLAR API ===== */
@@ -186,7 +183,7 @@ async function updateSolar(){
   }
 }
 updateSolar();
-setInterval(updateSolar, 1800000);
+setInterval(updateSolar,1800000);
 
 /* ===== SENSORS ===== */
 function drawSensors(){
@@ -199,29 +196,18 @@ function drawSensors(){
   scx.lineTo(sensorCanvas.width,baseY);
   scx.stroke();
 
-  // sun
   scx.fillStyle='rgba(255,210,120,0.85)';
   scx.beginPath();
   scx.arc(80, baseY-40, 10+solarFactor*3, 0, Math.PI*2);
   scx.fill();
-  scx.fillText('☀ сонце', 50, baseY+20);
+  scx.fillText('☀', 76, baseY+20);
 
-  // growth
   scx.strokeStyle='rgba(180,240,150,0.9)';
   scx.beginPath();
   scx.moveTo(160, baseY);
   scx.lineTo(160, baseY-growthEnergy*28);
   scx.stroke();
-  scx.fillText('🌾 ріст', 140, baseY+20);
-
-  // time
-  const now = new Date();
-  const t = Math.min(1,(now-START_DATE)/(STOP_DATE-START_DATE));
-  scx.strokeStyle='rgba(180,180,255,0.8)';
-  scx.beginPath();
-  scx.arc(260, baseY, 30, -Math.PI/2, -Math.PI/2+t*Math.PI*2);
-  scx.stroke();
-  scx.fillText('⏳ цикл', 235, baseY+20);
+  scx.fillText('🌾', 155, baseY+20);
 }
 
 /* ===== TIME ===== */
@@ -251,7 +237,6 @@ function loop(){
       w.draw();
     });
   }
-
   requestAnimationFrame(loop);
 }
 loop();
