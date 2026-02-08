@@ -12,26 +12,11 @@ html, body {
   overflow:hidden;
 }
 canvas { position:fixed; inset:0; }
-#sensors{ position:fixed; left:0; right:0; bottom:0; height:140px; pointer-events:none; }
-#info {
+#sensors{
   position:fixed;
-  bottom:12px; left:12px;
-  font-family:monospace;
-  color:#88ffcc;
-  font-size:12px;
-  line-height:1.4;
-  opacity:0.85;
-}
-#panel {
-  position:fixed;
-  bottom:12px; right:12px;
-  max-width:360px;
-  font-family:monospace;
-  font-size:12px;
-  color:#c7ffd9;
-  line-height:1.45;
-  background:linear-gradient(to left,rgba(0,0,0,0.65),transparent);
-  padding:10px 14px;
+  left:0; right:0; bottom:0;
+  height:140px;
+  pointer-events:none;
 }
 </style>
 </head>
@@ -39,22 +24,9 @@ canvas { position:fixed; inset:0; }
 <canvas id="stars"></canvas>
 <canvas id="terrarium"></canvas>
 <canvas id="sensors"></canvas>
-<div id="info">
-<b>IBONIRIUM · LAB TERRARIUM · EXP‑03</b><br>
-Phase: <span id="phase">Growth</span><br>
-Day: <span id="day">–</span><br>
-Solar SSN: <span id="ssn">–</span><br>
-Solar Factor: <span id="sf">–</span><br>
-Activity: <span id="ge">–</span><br>
-Target: 13 December
-</div>
-<div id="panel">
-<b>СТАН ЕКСПЕРИМЕНТУ</b><br>
-Поля культур з хаотичними формами та павутинням-зв’язками. З висоти утворюють лабіринт. Кожне поле — свій колір і форма.<br><br>
-До <b>13 грудня</b> — фаза росту. Потім фіксація.
-</div>
+
 <script>
-/* CANVAS */
+// CANVAS
 const starCanvas = document.getElementById('stars');
 const tCanvas = document.getElementById('terrarium');
 const sensorCanvas = document.getElementById('sensors');
@@ -69,7 +41,7 @@ function resize(){
 }
 addEventListener('resize', resize); resize();
 
-/* Зірки */
+// Зірки
 const stars = Array.from({length:300},()=>({x:Math.random(),y:Math.random(),z:Math.random()*0.8+0.2}));
 function drawStars(){
   sctx.clearRect(0,0,starCanvas.width,starCanvas.height);
@@ -85,10 +57,11 @@ function drawStars(){
   sctx.globalAlpha=1;
 }
 
-/* NOAA */
+// NOAA
 let solarFactor = 1;
 let solarSSN = 0;
 let activity = 0;
+
 async function updateSolar(){
   try{
     const r = await fetch('https://services.swpc.noaa.gov/json/solar-cycle/predicted-solar-cycle.json');
@@ -97,17 +70,16 @@ async function updateSolar(){
     solarSSN = l.predicted_ssn;
     solarFactor = Math.min(4, 0.7 + solarSSN/100);
     activity = solarFactor * (0.6 + Math.random()*0.4);
-   
-    document.getElementById('ssn').textContent = solarSSN.toFixed(1);
-    document.getElementById('sf').textContent = solarFactor.toFixed(2);
-    document.getElementById('ge').textContent = activity.toFixed(2);
   }catch(e){
     solarFactor = 1.2;
+    solarSSN = 120;
+    activity = 1.8;
   }
 }
-updateSolar(); setInterval(updateSolar, 1800000);
+updateSolar();
+setInterval(updateSolar, 1800000);
 
-/* КУЛЬТУРИ */
+// КУЛЬТУРИ
 const CULTURES = [
   {name:'Пшениця', color:'rgba(255,200,80,0.55)'},
   {name:'Ячмінь', color:'rgba(180,220,100,0.55)'},
@@ -118,13 +90,13 @@ const CULTURES = [
   {name:'Гречка', color:'rgba(255,150,180,0.55)'}
 ];
 
-/* Поле-клас */
+// Поле-клас
 class Field {
   constructor(x,y){
     this.cx=x;
     this.cy=y;
     this.growth=0;
-    this.maxGrowth=20 + Math.random()*20; // більше радіус
+    this.maxGrowth=20 + Math.random()*20;
     this.offset=Math.random();
     this.dir=Math.random()<0.5?1:-1;
     this.speed=0.0003 + Math.random()*0.0005;
@@ -140,15 +112,12 @@ class Field {
   draw(){
     const breath = 1 + Math.sin(Date.now()*0.0008 + this.offset*Math.PI)*0.03;
     const steps = Math.min(this.growth,this.maxGrowth)*30;
-
-    // Хаотична форма
     tctx.strokeStyle=this.culture.color;
     tctx.lineWidth=0.8;
     tctx.beginPath();
     for(let i=0;i<=steps;i++){
       const t=i/steps;
       let radius = t*100*breath*(1+activity*0.3);
-      // додаємо хаотичні точки для форми
       this.chaosPoints.forEach(p=>{
         radius += Math.sin(i*0.5 + p.x + Date.now()*0.0005)*5;
       });
@@ -160,7 +129,6 @@ class Field {
     }
     tctx.stroke();
 
-    // Центр поля
     const px=this.cx + Math.cos(this.offset*Math.PI*2)*this.growth*4;
     const py=this.cy + Math.sin(this.offset*Math.PI*2)*this.growth*4;
     tctx.fillStyle="rgba(30,20,50,0.9)";
@@ -170,13 +138,12 @@ class Field {
   }
 }
 
-/* Масив полів */
 const fields = Array.from({length:22},()=>new Field(
   Math.random()*tCanvas.width,
   Math.random()*tCanvas.height*0.85 + tCanvas.height*0.1
 ));
 
-/* Зв'язки — лабіринт */
+// Зв'язки — лабіринт
 function drawLinks(){
   tctx.strokeStyle='rgba(180,180,255,0.1)';
   tctx.lineWidth=0.5;
@@ -197,7 +164,7 @@ function drawLinks(){
   }
 }
 
-/* SENSORS */
+// SENSORS (залишив візуалізацію без тексту)
 function drawSensors(){
   scx.clearRect(0,0,sensorCanvas.width,sensorCanvas.height);
   const baseY = 110;
@@ -208,15 +175,12 @@ function drawSensors(){
   scx.beginPath();
   scx.arc(80, baseY-40, 9 + solarFactor*4.5, 0, Math.PI*2);
   scx.fill();
-  scx.fillStyle="#fff"; scx.font="11px monospace";
-  scx.fillText('☀ SSN', 55, baseY+20);
 
   scx.strokeStyle='rgba(160,220,255,0.75)';
   scx.beginPath();
   scx.moveTo(160, baseY);
   scx.lineTo(160, baseY - activity*32);
   scx.stroke();
-  scx.fillText('🧬 ріст', 130, baseY+20);
 
   const now = new Date();
   const t = Math.min(1,(now-START_DATE)/(STOP_DATE-START_DATE));
@@ -224,29 +188,22 @@ function drawSensors(){
   scx.beginPath();
   scx.arc(260, baseY, 30, -Math.PI/2, -Math.PI/2 + t*Math.PI*2);
   scx.stroke();
-  scx.fillText('⏳', 245, baseY+20);
 }
 
-/* LOOP */
+// LOOP
 const START_DATE = new Date('2026-01-01');
 const STOP_DATE = new Date('2026-12-13');
-function updateDay(){
-  const now = new Date();
-  const day = Math.floor((now-START_DATE)/86400000);
-  document.getElementById('day').textContent = day>=0?day:'–';
-  document.getElementById('phase').textContent = now<STOP_DATE?'Growth':'Final';
-}
-setInterval(updateDay,60000);
-updateDay();
 
 function loop(){
   drawStars();
   drawSensors();
-  if(new Date()<STOP_DATE){
+
+  if(new Date() < STOP_DATE){
     tctx.clearRect(0,0,tCanvas.width,tCanvas.height);
     fields.forEach(f=>{ f.grow(); f.draw(); });
     drawLinks();
   }
+
   requestAnimationFrame(loop);
 }
 loop();
